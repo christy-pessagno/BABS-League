@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <rect width="180" height="180" rx="40" fill="#1F6B44"/>
+  <circle cx="90" cy="82" r="46" fill="#D8E000"/>
+  <g fill="#1F6B44"><circle cx="90" cy="60" r="5"/><circle cx="72" cy="74" r="5"/><circle cx="108" cy="74" r="5"/>
+  <circle cx="78" cy="95" r="5"/><circle cx="102" cy="95" r="5"/><circle cx="90" cy="105" r="5"/></g>
+  <text x="90" y="160" font-family="Arial,sans-serif" font-size="26" font-weight="800" fill="#F2EEE2" text-anchor="middle">BABS</text>
+</svg>
