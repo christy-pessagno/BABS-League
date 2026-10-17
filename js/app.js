@@ -5,7 +5,7 @@ import { getState, update, subscribe, newId } from "./store.js";
 var MIN_COURTS = 1, MAX_COURTS = 8;
 
 // Screen-only state (not saved).
-var ui = { tab: null, viewSet: null, selected: null };
+var ui = { tab: null, viewSet: null, selected: null, editRoster: false };
 
 // ---- Helpers ----
 function esc(s) {
@@ -23,6 +23,10 @@ function niceDate(iso) {
 function name(id) {
   var p = getState().players[id];
   return p ? p.name : "?";
+}
+// Removed players stay in the data so past games still show their names.
+function activePlayers(st) {
+  return Object.keys(st.players).filter(function (id) { return !st.players[id].removed; });
 }
 function byName(ids) {
   return ids.slice().sort(function (a, b) { return name(a).localeCompare(name(b)); });
@@ -139,28 +143,49 @@ function fillInHtml(set, sched, g) {
 }
 
 // ---- Screens ----
+// The roster: check-in list during a session, a plain list otherwise, and an
+// edit mode for renaming or removing players.
+function rosterCard(st, s) {
+  var ids = byName(activePlayers(st)), html = "<div class='card'>";
+  var title = s ? "Check-in &middot; " + esc(niceDate(s.date)) : "Players";
+  html += "<div class='card-head'><h3>" + title + "</h3>" +
+          (ids.length ? "<button class='link-btn' data-action='toggle-edit'>" + (ui.editRoster ? "Done" : "Edit") + "</button>" : "") +
+          "</div>";
+  if (ui.editRoster) {
+    html += "<p class='hint'>Change a name, or remove someone who&rsquo;s left the league. Past results are kept.</p><div class='roster'>";
+    ids.forEach(function (id) {
+      html += "<div class='edit-row'><input data-rename='" + id + "' maxlength='24' value='" + esc(name(id)) + "' aria-label='Name' />" +
+              "<button class='remove' data-remove='" + id + "'>Remove</button></div>";
+    });
+    html += "</div>";
+  } else if (s) {
+    var here = {};
+    s.attendees.forEach(function (id) { here[id] = 1; });
+    html += "<p class='hint'>" + s.attendees.length + " here. Tap a name to check them in or out.</p><div class='roster'>";
+    ids.forEach(function (id) {
+      html += "<button class='check " + (here[id] ? "on" : "") + "' data-check='" + id + "'>" +
+              "<span class='box'>" + (here[id] ? ICON.tick : "") + "</span>" + esc(name(id)) + "</button>";
+    });
+    html += "</div>";
+  } else {
+    html += "<p class='hint'>" + (ids.length ? ids.length + " on the roster." : "No players yet. Add them below.") + "</p>";
+    if (ids.length) html += "<div class='chips'>" + ids.map(function (id) { return "<span class='chip'>" + esc(name(id)) + "</span>"; }).join("") + "</div>";
+  }
+  html += "<div class='add-row'><input id='new-player' placeholder='Add names (Ann, Bill&hellip;)' autocomplete='off' />" +
+          "<button data-action='add-player'>Add</button></div>";
+  return html + "</div>";
+}
+
 function sessionPane() {
   var st = getState(), s = st.session, html = "<div class='pane'>";
   if (!s) {
-    var count = Object.keys(st.players).length;
     html += "<div class='card'><h3>Today&rsquo;s session</h3>" +
-            "<p class='hint'>Check in who&rsquo;s here, make teams, then start Set 1." +
-            (count ? " " + count + " players on the roster." : "") + "</p>" +
+            "<p class='hint'>Check in who&rsquo;s here, make teams, then start Set 1.</p>" +
             "<button class='btn' data-action='start-session'>Start a session</button></div>";
-    return html + "</div>";
+    return html + rosterCard(st, null) + "</div>";
   }
 
-  // Check-in
-  var here = {};
-  s.attendees.forEach(function (id) { here[id] = 1; });
-  html += "<div class='card'><h3>Check-in &middot; " + esc(niceDate(s.date)) + "</h3>" +
-          "<p class='hint'>" + s.attendees.length + " here. Tap a name to check them in or out.</p><div class='roster'>";
-  byName(Object.keys(st.players)).forEach(function (id) {
-    html += "<button class='check " + (here[id] ? "on" : "") + "' data-check='" + id + "'>" +
-            "<span class='box'>" + (here[id] ? ICON.tick : "") + "</span>" + esc(name(id)) + "</button>";
-  });
-  html += "</div><div class='add-row'><input id='new-player' maxlength='24' placeholder='Add a player' autocomplete='off' />" +
-          "<button data-action='add-player'>Add</button></div></div>";
+  html += rosterCard(st, s);
 
   if (s.draft) {
     var number = s.sets.length + 1, free = unpaired(s), d = s.draft;
@@ -328,14 +353,21 @@ function confirmTap(btn, armedLabel, run) {
   }, 4000);
 }
 
+// Add one or more players ("Ann, Bill, Cara"). A name already on the roster
+// isn't duplicated; a removed player with that name is brought back. During a
+// session, everyone added is checked in.
 function addPlayer() {
   var input = document.getElementById("new-player");
-  var value = input ? input.value.trim() : "";
-  if (!value) return;
-  var id = newId();
+  var names = (input ? input.value : "").split(/[,\n]/).map(function (n) { return n.trim().slice(0, 24); })
+    .filter(function (n) { return n; });
+  if (!names.length) return;
   update(function (st) {
-    st.players[id] = { id: id, name: value };
-    if (st.session) st.session.attendees.push(id);
+    names.forEach(function (n) {
+      var id = Object.keys(st.players).find(function (k) { return st.players[k].name.toLowerCase() === n.toLowerCase(); });
+      if (id) delete st.players[id].removed;
+      else { id = newId(); st.players[id] = { id: id, name: n }; }
+      if (st.session && st.session.attendees.indexOf(id) === -1) st.session.attendees.push(id);
+    });
   });
   var again = document.getElementById("new-player");
   if (again) again.focus();
@@ -368,6 +400,21 @@ app.addEventListener("click", function (e) {
       if (ss.draft) ss.draft.teams = ss.draft.teams.filter(function (t) { return t.indexOf(pid) === -1; });
     });
     if (ui.selected === pid) { ui.selected = null; render(); }
+    return;
+  }
+
+  if (el.dataset.remove) {
+    var removeId = el.dataset.remove;
+    confirmTap(el, "Tap again", function () {
+      update(function (st) {
+        st.players[removeId].removed = true;
+        var ss = st.session;
+        if (!ss) return;
+        ss.attendees = ss.attendees.filter(function (x) { return x !== removeId; });
+        if (ss.draft) ss.draft.teams = ss.draft.teams.filter(function (t) { return t.indexOf(removeId) === -1; });
+      });
+      if (ui.selected === removeId) ui.selected = null;
+    });
     return;
   }
 
@@ -420,6 +467,10 @@ app.addEventListener("click", function (e) {
       break;
     case "add-player":
       addPlayer();
+      break;
+    case "toggle-edit":
+      ui.editRoster = !ui.editRoster;
+      render();
       break;
     case "shuffle":
       update(function (st) {
@@ -503,6 +554,12 @@ app.addEventListener("input", function (e) {
 
 app.addEventListener("change", function (e) {
   var sel = e.target;
+  if (sel.dataset && sel.dataset.rename) {
+    var renameId = sel.dataset.rename, newName = sel.value.trim().slice(0, 24);
+    if (!newName) { sel.value = name(renameId); return; }
+    update(function (st) { st.players[renameId].name = newName; }, true);
+    return;
+  }
   if (!sel.dataset || !sel.dataset.fill) return;
   var key = sel.dataset.fill, setIdx = viewedSetIndex(), value = sel.value;
   update(function (st) {
