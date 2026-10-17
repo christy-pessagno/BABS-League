@@ -14,10 +14,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/styles.css?v=c495812f" />
 </head>
 <body>
 <div id="app"></div>
-<script type="module" src="js/app.js"></script>
+<script type="importmap">
+{ "imports": {
+  "./js/scheduler.js": "./js/scheduler.js?v=5d521f56",
+  "./js/standings.js": "./js/standings.js?v=050cc0e2",
+  "./js/store.js": "./js/store.js?v=8cedcfdc"
+} }
+</script>
+<script type="module" src="js/app.js?v=836e4e0b"></script>
 </body>
 </html>

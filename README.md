@@ -25,4 +25,6 @@ The next version of the BABS pickleball round robin app, with players, sessions 
 - `js/store.js`: data storage. Stage 2 swaps this to Firebase.
 - `js/app.js`: the screens.
 
+Before committing a change to any CSS or JS file, run `python3 tools/stamp.py`. It gives each file a version tag in `index.html` so phones load the new code on their next refresh instead of a cached copy.
+
 To run it locally, serve the folder (for example `python3 -m http.server`) and open it in a browser. It can't be opened as a plain file because it uses JavaScript modules.
